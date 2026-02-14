@@ -1,8 +1,14 @@
 import streamlit as st
-import cv2
-import numpy as np
 import os
+import numpy as np
+import matplotlib.pyplot as plt
+import mahotas
+from PIL import Image
+from sklearn.preprocessing import StandardScaler
+from sklearn.decomposition import PCA
+from skimage.feature import local_binary_pattern
 import joblib
+
 
 # Import page functions
 from pages import render_prediksi, render_galeri, render_pipeline, render_evaluasi
