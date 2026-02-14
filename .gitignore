@@ -1,0 +1,10 @@
+.DS_Store
+venv/
+__pycache__/
+*.pyc
+
+data_udang/
+archive/
+shrimp_dataset.csv
+X_test.pkl
+y_test.pkl
