@@ -1,144 +1,173 @@
+import streamlit as st
+import os
+import numpy as np
+import matplotlib.pyplot as plt
+import mahotas
+from utils import get_sample_image_from_dataset, generate_augmentation_samples, generate_preprocessing_samples
+
 def render_pipeline():
-    st.title("🦐 Full Pipeline - Sistem Deteksi Penyakit Udang")
+    """Render Pipeline page with visualizations"""
+        
+# ============================================================
+# DATASET STATISTICS
+# ============================================================
+st.markdown("---")
+st.markdown("### Statistik Dataset")
 
-    # ============================================================
-    # STEP 0: LOAD IMAGE (AUTO / UPLOAD)
-    # ============================================================
-    st.markdown("---")
-    st.header("1️Load Image")
+col_stat1, col_stat2, col_stat3, col_stat4 = st.columns(4)
 
-    sample_img = None
+with col_stat1:
+    st.markdown("""<div class="metric-card">
+    <div class="metric-value">1,149</div>
+    <div class="metric-label">Total Images</div>
+    </div>""", unsafe_allow_html=True)
 
-    # Mode otomatis (lokal)
-    if os.path.exists("data_udang"):
-        from utils import get_sample_image_from_dataset
+with col_stat2:
+    st.markdown("""<div class="metric-card">
+    <div class="metric-value">9,192</div>
+    <div class="metric-label">After Augmentation</div>
+    </div>""", unsafe_allow_html=True)
+
+with col_stat3:
+    st.markdown("""<div class="metric-card">
+    <div class="metric-value">7,353</div>
+    <div class="metric-label">Training Set (80%)</div>
+    </div>""", unsafe_allow_html=True)
+
+with col_stat4:
+    st.markdown("""<div class="metric-card">
+    <div class="metric-value">1,839</div>
+    <div class="metric-label">Test Set (20%)</div>
+    </div>""", unsafe_allow_html=True)
+
+# ============================================================
+# TAHAP 1: DATA COLLECTION & AUGMENTATION
+# ============================================================
+st.markdown("---")
+st.markdown("### 1: Data Collection & Augmentation")
+
+# Check if dataset exists
+dataset_exists = os.path.exists("data_udang") and any(
+    os.path.exists(os.path.join("data_udang", folder)) 
+    for folder in ["1. Healthy", "2. BG", "3. WSSV", "4. WSSV_BG"]
+)
+
+sample_img = None
+
+if dataset_exists:
+    # Try to load from dataset
+    try:
         sample_img = get_sample_image_from_dataset()
-        st.success("Mode Lokal: Menggunakan dataset otomatis")
+        if sample_img:
+            st.success("✅ Dataset ditemukan! Menggunakan sample dari dataset.")
+    except Exception as e:
+        st.warning(f"⚠️ Error loading dataset: {str(e)}")
+        dataset_exists = False
 
-    # Kalau dataset tidak ada → upload
-    if sample_img is None:
-        st.info("Mode Deploy: Upload gambar untuk demo pipeline")
-
-        uploaded_file = st.file_uploader(
-            "Upload gambar udang",
-            type=["jpg", "jpeg", "png"]
-        )
-
-        if uploaded_file is not None:
-            sample_img = Image.open(uploaded_file)
-
-    if sample_img is None:
-        st.stop()
-
-    st.image(sample_img, caption="Input Image", use_container_width=True)
-
-    # ============================================================
-    # STEP 2: AUGMENTATION
-    # ============================================================
-    st.markdown("---")
-    st.header("Data Augmentation")
-
-    col1, col2, col3, col4 = st.columns(4)
-
-    img_np = np.array(sample_img)
-
-    flip = np.fliplr(img_np)
-    rotate = np.rot90(img_np)
-    brightness = np.clip(img_np + 30, 0, 255)
-    contrast = np.clip(1.2 * img_np, 0, 255)
-
-    with col1:
-        st.image(flip, caption="Flip")
-    with col2:
-        st.image(rotate, caption="Rotate")
-    with col3:
-        st.image(brightness, caption="Brightness +")
-    with col4:
-        st.image(contrast, caption="Contrast +")
-
-    # ============================================================
-    # STEP 3: PREPROCESSING
-    # ============================================================
-    st.markdown("---")
-    st.header("Preprocessing")
-
-    resized = sample_img.resize((128, 128))
-    gray = resized.convert("L")
-
-    col1, col2 = st.columns(2)
-
-    with col1:
-        st.image(resized, caption="Resized 128x128")
-
-    with col2:
-        st.image(gray, caption="Grayscale")
-
-    gray_np = np.array(gray)
-
-    # ============================================================
-    # STEP 4: FEATURE EXTRACTION
-    # ============================================================
-    st.markdown("---")
-    st.header("Feature Extraction")
-
-    # LBP
-    lbp = local_binary_pattern(gray_np, 24, 3, 'uniform')
-    lbp_hist, _ = np.histogram(lbp.ravel(),
-                                bins=np.arange(0, 27),
-                                range=(0, 26))
-    lbp_hist = lbp_hist.astype("float")
-    lbp_hist /= (lbp_hist.sum() + 1e-6)
-
-    # GLCM (Haralick)
-    glcm_features = mahotas.features.haralick(gray_np).mean(axis=0)
-
-    features = np.hstack([lbp_hist, glcm_features])
-
-    col1, col2 = st.columns(2)
-
-    with col1:
-        fig1, ax1 = plt.subplots()
-        ax1.imshow(lbp, cmap='viridis')
-        ax1.set_title("LBP")
-        ax1.axis('off')
-        st.pyplot(fig1)
-        plt.close()
-
-    with col2:
-        fig2, ax2 = plt.subplots()
-        ax2.barh(range(len(glcm_features)), glcm_features)
-        ax2.set_title("GLCM Features")
-        st.pyplot(fig2)
-        plt.close()
-
-    st.success(f"Total Features: {len(features)} (LBP + GLCM)")
-
-    # ============================================================
-    # STEP 5: NORMALIZATION + PCA
-    # ============================================================
-    st.markdown("---")
-    st.header("5️⃣ Normalization & PCA")
-
-    scaler = StandardScaler()
-    features_scaled = scaler.fit_transform([features])
-
-    pca = PCA(n_components=min(len(features), 10))
-    features_pca = pca.fit_transform(features_scaled)
-
-    st.write("PCA Components:", features_pca.shape[1])
-    st.write("Explained Variance Ratio:", pca.explained_variance_ratio_)
-
-    # ============================================================
-    # STEP 6: PREDICTION (OPTIONAL IF MODEL EXISTS)
-    # ============================================================
-    st.markdown("---")
-    st.header("Prediction")
-
-    if os.path.exists("model.pkl"):
-        model = joblib.load("model.pkl")
-
-        prediction = model.predict(features_scaled)
-        st.success(f"Hasil Prediksi: {prediction[0]}")
-
+if not dataset_exists or sample_img is None:
+    # Fallback: Manual upload
+    st.warning("⚠️ Dataset tidak tersedia (deployment mode). Silakan upload gambar udang untuk demo.")
+    
+    uploaded_demo = st.file_uploader(
+        "Upload gambar udang untuk demo augmentasi:",
+        type=["jpg", "png", "jpeg"],
+        key="pipeline_demo_upload"
+    )
+    
+    if uploaded_demo:
+        sample_img = Image.open(uploaded_demo).convert('RGB')
+        st.success("✅ Gambar berhasil di-upload!")
     else:
-        st.warning("Model belum tersedia (model.pkl tidak ditemukan)")
+        st.info("👆 Upload gambar udang di atas untuk melihat demo augmentasi data.")
+
+if sample_img:
+    # Generate augmented samples
+    aug_samples = generate_augmentation_samples(sample_img)
+    
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.image(aug_samples['original'], caption="Original", use_container_width=True)
+    with col2:
+        st.image(aug_samples['flip'], caption="Horizontal Flip", use_container_width=True)
+    with col3:
+        st.image(aug_samples['rotate'], caption="Rotate +10°", use_container_width=True)
+    with col4:
+        st.image(aug_samples['brightness'], caption="Brightness +20%", use_container_width=True)
+    
+    st.info("💡 Setiap gambar original menghasilkan 8 variasi (flip, rotate ±10°, brightness ±20%, contrast ±20%)")
+    
+    # ============================================================
+    # TAHAP 2: PREPROCESSING
+    # ============================================================
+    st.markdown("---")
+    st.markdown("### Tahap 2: Preprocessing")
+    
+    preproc_samples = generate_preprocessing_samples(sample_img)
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.image(preproc_samples['original'], caption="Original (High Res)", use_container_width=True)
+    with col2:
+        st.image(preproc_samples['resized'], caption="Resized (128x128)", use_container_width=True)
+    with col3:
+        st.image(preproc_samples['grayscale'], caption="Grayscale", use_container_width=True)
+    
+    # ============================================================
+    # TAHAP 3: FEATURE EXTRACTION
+    # ============================================================
+    st.markdown("---")
+    st.markdown("### Tahap 3: Feature Extraction")
+    
+    img_np = np.array(preproc_samples['grayscale'])
+    
+    from skimage.feature import local_binary_pattern
+    lbp = local_binary_pattern(img_np, 24, 3, 'uniform')
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        fig_lbp, ax_lbp = plt.subplots(figsize=(6, 5))
+        im_lbp = ax_lbp.imshow(lbp, cmap='viridis')
+        ax_lbp.set_title('LBP (Local Binary Pattern)', fontweight='bold')
+        ax_lbp.axis('off')
+        plt.colorbar(im_lbp, ax=ax_lbp)
+        st.pyplot(fig_lbp)
+        plt.close()
+        st.caption("📐 LBP menghasilkan 26 features (histogram bins)")
+    
+    with col2:
+        glcm_features = mahotas.features.haralick(img_np).mean(axis=0)
+        
+        fig_glcm, ax_glcm = plt.subplots(figsize=(6, 5))
+        ax_glcm.barh(range(len(glcm_features)), glcm_features, color='#1B4D3E')
+        ax_glcm.set_yticks(range(len(glcm_features)))
+        ax_glcm.set_yticklabels([f'F{i+1}' for i in range(len(glcm_features))], fontsize=8)
+        ax_glcm.set_xlabel('Value')
+        ax_glcm.set_title('GLCM Features (Haralick)', fontweight='bold')
+        ax_glcm.invert_yaxis()
+        st.pyplot(fig_glcm)
+        plt.close()
+        st.caption("📊 GLCM menghasilkan 13 features (texture properties)")
+        
+        # ============================================================
+        # TAHAP 4: PCA VISUALIZATION
+        # ============================================================
+        st.markdown("---")
+        st.markdown("### Tahap 4: Normalization & PCA")
+        
+        if os.path.exists("pca_clusters_augmented.png"):
+            st.image("pca_clusters_augmented.png", caption="PCA Visualization: 38 components, 100% variance retained", use_container_width=True)
+        else:
+            st.info("PCA visualization akan muncul setelah training model")
+        
+        st.markdown("""
+        **Proses:**
+        1. **StandardScaler**: Normalisasi 39 features → mean=0, std=1
+        2. **PCA**: Reduksi dimensi 39 → 38 components
+        3. **Variance retained**: 100% (tidak ada informasi hilang)
+        """)
+        
+else:
+    st.warning("⚠️ Sample image tidak ditemukan di dataset. Pastikan folder 'data_udang' tersedia.")
