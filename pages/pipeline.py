@@ -77,7 +77,7 @@ def render_pipeline():
             sample_img = Image.open(uploaded_demo).convert('RGB')
             st.success("✅ Gambar berhasil di-upload!")
         else:
-            st.info("👆 Upload gambar udang di atas untuk melihat demo augmentasi data.")
+            st.info("Upload gambar udang di atas untuk melihat demo augmentasi data.")
     
     if sample_img:
         aug_samples = generate_augmentation_samples(sample_img)
@@ -148,10 +148,6 @@ def render_pipeline():
             st.pyplot(fig_glcm)
             plt.close()
             st.caption("📊 GLCM menghasilkan 13 features (texture properties)")
-        
-        if os.path.exists("pca_clusters_augmented.png"):
-            st.image("pca_clusters_augmented.png", caption="PCA Visualization: 38 components, 100% variance retained", use_container_width=True)
-            st
         
         # ============================================================
         # TAHAP 4: PCA VISUALIZATION
