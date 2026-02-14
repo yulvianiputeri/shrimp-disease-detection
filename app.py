@@ -92,19 +92,36 @@ st.markdown("""<style>
 # ============================================================
 # LOAD MODELS
 # ============================================================
+# ===============================
+# LOAD MAIN MODELS (WAJIB)
+# ===============================
 try:
     knn = joblib.load("knn_model.pkl")
     svm = joblib.load("svm_model.pkl")
     voting = joblib.load("voting_model.pkl")
     scaler = joblib.load("scaler.pkl")
     pca = joblib.load("pca.pkl")
+
+    st.sidebar.markdown(
+        '<div class="sidebar-header"><div class="sidebar-logo">🦐</div><div class="sidebar-title">Sistem Deteksi Udang</div></div>',
+        unsafe_allow_html=True
+    )
+
+except FileNotFoundError as e:
+    st.error(f"Model utama tidak ditemukan: {e}")
+    st.stop()
+
+
+# ===============================
+# LOAD EVALUATION FILES (OPSIONAL)
+# ===============================
+try:
     X_test_eval = joblib.load("X_test.pkl")
     y_test_eval = joblib.load("y_test.pkl")
-    
-    st.sidebar.markdown('<div class="sidebar-header"><div class="sidebar-logo">🦐</div><div class="sidebar-title">Sistem Deteksi Udang</div></div>', unsafe_allow_html=True)
-except FileNotFoundError:
-    st.sidebar.error("File model tidak ditemukan.")
-    st.stop()
+    eval_available = True
+except:
+    eval_available = False
+
 
 # ============================================================
 # HELPER FUNCTIONS
@@ -152,4 +169,7 @@ elif menu == "Pipeline":
     render_pipeline()
 
 elif menu == "Evaluasi Model":
-    render_evaluasi(knn, svm, voting, X_test_eval, y_test_eval)
+    if eval_available:
+        render_evaluasi(knn, svm, voting, X_test_eval, y_test_eval)
+    else:
+        st.warning("File evaluasi tidak tersedia pada versi deployment.")
